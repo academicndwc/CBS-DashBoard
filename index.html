@@ -30,6 +30,9 @@
   --brand:#7b8fe0; --brand-soft:#EFF0FC;
   --alert:#D6483A; --alert-soft:#FBEAE8;
   --amber:#C9832B; --amber-soft:#FBF1E2;
+  --yellow:#C9A82B; --yellow-soft:#FBF6E2;
+  --green:#3F9A5C; --green-soft:#E7F5EC;
+  --dot-red:#EF4136; --dot-orange:#F0821E; --dot-yellow:#F2C11A; --dot-green:#2FAE5C;
   --indigo:#79b3f4;
   --radius:10px;
   --shadow:0 1px 2px rgba(20,30,30,.04), 0 4px 14px rgba(20,30,30,.05);
@@ -83,6 +86,8 @@ a{color:var(--brand);}
 .btn:hover{border-color:#fff;background:#fff;color:#3348A8;transform:translateY(-1px);}
 .btn-brand{background:rgba(255,255,255,.16);border-color:rgba(255,255,255,.45);color:#fff;}
 .btn-brand:hover{opacity:.96;color:#fff;background:rgba(255,255,255,.25);}
+.btn-apply{background:var(--brand);border-color:var(--brand);color:#fff;box-shadow:0 2px 6px rgba(123,143,224,.35);}
+.btn-apply:hover{background:#6a7fd6;border-color:#6a7fd6;color:#fff;transform:translateY(-1px);}
 .demo-banner{display:none;background:var(--amber-soft);color:#8a5a12;border-bottom:1px solid #f0dcb0;
   font-size:15px;padding:8px 22px;text-align:center;}
 .loading-overlay{position:fixed;inset:0;background:rgba(242,244,245,.94);display:flex;flex-direction:column;
@@ -213,6 +218,16 @@ tbody tr:hover{background:#FAFBFB;}
 .msg-cell .short{cursor:pointer;}
 .msg-cell .toggle{color:var(--brand);cursor:pointer;font-size:13.5px;font-weight:600;margin-left:4px;}
 .table-foot{display:flex;justify-content:space-between;align-items:center;margin-top:10px;font-size:14.5px;color:var(--text-soft);}
+.alert-legend{margin-top:14px;padding-top:12px;border-top:1px solid var(--border);
+  display:flex;flex-wrap:wrap;gap:8px 18px;align-items:center;font-size:13.5px;color:var(--text-soft);}
+.alert-legend b{color:var(--text);font-size:13.5px;margin-right:2px;}
+.alert-legend span{display:inline-flex;align-items:center;gap:6px;white-space:nowrap;}
+.alert-legend .dot{width:9px;height:9px;border-radius:50%;flex-shrink:0;}
+.alert-legend .dot-pra{background:var(--dot-red);}
+.alert-legend .dot-exa{background:var(--dot-orange);}
+.alert-legend .dot-aci{background:var(--dot-yellow);}
+.alert-legend .dot-all{background:var(--dot-green);}
+@media(max-width:760px){.alert-legend{flex-direction:column;align-items:flex-start;gap:6px;}}
 .search-box{padding:7px 10px;border:1px solid var(--border);border-radius:7px;font-size:15px;width:220px;}
 
 /* ---------- footer ---------- */
@@ -286,7 +301,7 @@ tbody tr:hover{background:#FAFBFB;}
       <div class="time-custom" id="customDatePanel">
         <div class="f-group"><label>ตั้งแต่วันที่</label><input type="date" id="fDateFrom"></div>
         <div class="f-group"><label>ถึงวันที่</label><input type="date" id="fDateTo"></div>
-        <button type="button" class="btn btn-brand" id="applyCustomDate">ใช้งานช่วงนี้</button>
+        <button type="button" class="btn btn-apply" id="applyCustomDate">ใช้งานช่วงนี้</button>
       </div>
       <div class="time-summary"><span class="summary-dot"></span><span id="dateRangeSummary">🗓 กำลังแสดงข้อมูล: -</span></div>
     </div>
@@ -376,6 +391,13 @@ tbody tr:hover{background:#FAFBFB;}
     <div class="table-foot">
       <span id="tableCount">–</span>
       <div id="pagination"></div>
+    </div>
+    <div class="alert-legend">
+      <b>คำอธิบายประเภทการแจ้งเตือน:</b>
+      <span><span class="dot dot-pra"></span>National Alert (PRA) = การแจ้งเตือนระดับชาติ</span>
+      <span><span class="dot dot-exa"></span>Extreme Alert (EXA) = การแจ้งเตือนภัยขั้นรุนแรง</span>
+      <span><span class="dot dot-aci"></span>Informational Alert (ACI) = การแจ้งเตือนเพื่อให้ข้อมูล</span>
+      <span><span class="dot dot-all"></span>All Clear (ALL) = การแจ้งเตือนสิ้นสุดภัย</span>
     </div>
   </div>
 
