@@ -437,9 +437,14 @@ tbody tr:hover{background:#FAFBFB;}
    CONFIG — แก้ตรงนี้จุดเดียวเพื่อเชื่อมต่อฐานข้อมูลจริง
    ============================================================================ */
 const CONFIG = {
-  API_URL: 'https://script.google.com/macros/s/AKfycbypPalKcGpXQXvrGqo3-NFTRfGdhShklY_vrGMwLRsAvQugFaV6-gApi6M-S6MBI5hE6Q/exec',                 // <-- วาง URL ของ Web App (.../exec) ที่ได้จาก Apps Script ตรงนี้
+  API_URL: 'https://script.google.com/macros/s/AKfycbypPalKcGpXQXvrGqo3-NFTRfGdhShklY_vrGMwLRsAvQugFaV6-gApi6M-S6MBI5hE6Q/exec',   // <-- Apps Script URL — ใช้เป็น fallback เท่านั้น (ดู DATA_JSON_URL ด้านล่างสำหรับทางหลัก)
+  // ไฟล์นิ่งที่ Apps Script เขียนขึ้น GitHub ทุก 2 นาที (ดูฟังก์ชัน publishSnapshot ใน Code.gs)
+  // โหลดจากตรงนี้เป็นหลัก เพราะ GitHub Pages เสิร์ฟผ่าน CDN รองรับคนดูพร้อมกันได้เยอะกว่าการยิง
+  // Apps Script ตรงๆ มาก และไม่มีปัญหา cold-start/concurrent-execution quota ของ Apps Script เลย
+  DATA_JSON_URL: 'data/data.json',
+  GEO_JSON_URL: 'data/geo.json',
   REFRESH_INTERVAL_MS: 5 * 60 * 1000,  // อัปเดตข้อมูลอัตโนมัติทุก 5 นาที
-  JSONP_TIMEOUT_MS: 8000,
+  JSONP_TIMEOUT_MS: 15000,  // เผื่อเวลา cold-start ของ Apps Script (ใช้เฉพาะตอน fallback)
 };
 
 /* ============================================================================
@@ -495,20 +500,25 @@ function jsonpFetch(url, timeoutMs) {
 }
 
 function loadData() {
-  if (!CONFIG.API_URL) {
-    showLoading(false);
-    showError('ยังไม่ได้ตั้งค่า CONFIG.API_URL ในไฟล์นี้ กรุณาใส่ URL ของ Web App ก่อนใช้งาน');
-    return;
-  }
   if (!hasLoadedOnce) showLoading(true);
   hideError();
 
   const needGeo = !GEO;
-  const dataUrl = CONFIG.API_URL + '?type=data';
-  const geoUrl = CONFIG.API_URL + '?type=geo';
+  const bust = (u) => u + (u.includes('?') ? '&' : '?') + 'v=' + Date.now(); // กัน browser/GitHub Pages cache เก่าค้าง
 
-  const dataPromise = jsonpFetch(dataUrl, CONFIG.JSONP_TIMEOUT_MS);
-  const geoPromise = needGeo ? jsonpFetch(geoUrl, CONFIG.JSONP_TIMEOUT_MS) : Promise.resolve(GEO);
+  // ทางหลัก: อ่านไฟล์นิ่งจาก GitHub Pages (เร็ว รองรับคนพร้อมกันได้เยอะ ไม่ผ่าน Apps Script)
+  // ทางสำรอง: ถ้าไฟล์ยังไม่เคยถูก publish (404) หรือโหลดไม่สำเร็จ ค่อย fallback ไปยิง Apps Script ตรงๆ
+  const fetchJson = (staticUrl, apiType) =>
+    fetch(bust(staticUrl)).then(r => {
+      if (!r.ok) throw new Error('static-404');
+      return r.json();
+    }).catch(() => {
+      if (!CONFIG.API_URL) throw new Error('no-fallback');
+      return jsonpFetch(CONFIG.API_URL + '?type=' + apiType, CONFIG.JSONP_TIMEOUT_MS);
+    });
+
+  const dataPromise = fetchJson(CONFIG.DATA_JSON_URL, 'data');
+  const geoPromise = needGeo ? fetchJson(CONFIG.GEO_JSON_URL, 'geo') : Promise.resolve(GEO);
 
   Promise.all([dataPromise, geoPromise]).then(([data, geo]) => {
     RAW = data;
@@ -1107,7 +1117,13 @@ document.addEventListener('DOMContentLoaded', () => {
   updateAmphoeOptions();
   updateTambonOptions();
   loadData();
-  setInterval(loadData, CONFIG.REFRESH_INTERVAL_MS);
+  // สุ่มหน่วงเวลาแต่ละรอบ ±20 วิ กันไม่ให้ผู้ใช้ทุกคนที่เปิดหน้าเว็บพร้อมกัน (เช่นตอนเกิดเหตุ)
+  // ยิง request เข้า Apps Script ตรงจังหวะเดียวกันหมดทุก 5 นาที ซึ่งเป็นสาเหตุหนึ่งที่ทำให้ช้า/timeout ตอนคนเยอะ
+  function scheduleNextRefresh() {
+    const jitter = (Math.random() * 40000) - 20000; // -20s ถึง +20s
+    setTimeout(() => { loadData(); scheduleNextRefresh(); }, CONFIG.REFRESH_INTERVAL_MS + jitter);
+  }
+  scheduleNextRefresh();
 });
 
 /* ============================================================================
