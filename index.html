@@ -359,7 +359,7 @@ tbody tr:hover{background:#FAFBFB;}
       <div class="legend-box"><span>น้อย</span><div class="legend-scale"></div><span>มาก</span></div>
     </div>
     <div class="card">
-      <div class="card-head"><h3>พื้นที่ที่ได้รับแจ้งเตือนมากที่สุด (10 อันดับ)</h3></div>
+      <div class="card-head"><h3>พื้นที่ที่ได้รับแจ้งเตือนมากที่สุด (15 อันดับ)</h3></div>
       <div class="hint" id="hotspotLevelHint" style="margin-bottom:6px;">แสดงระดับจังหวัด (ภาพรวมทั้งประเทศ)</div>
       <ul class="hotspot-list" id="hotspotList"></ul>
     </div>
@@ -939,7 +939,7 @@ function renderHotspots(areaRows) {
     .map(([name, ids]) => [name, ids.size])
     .filter(([, count]) => count > 0)
     .sort((a,b) => b[1] - a[1] || a[0].localeCompare(b[0], 'th'))
-    .slice(0, 10);
+    .slice(0, 15);
 
   document.getElementById('hotspotList').innerHTML = top.length
     ? top.map(([name,c],i) =>
