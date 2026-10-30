@@ -339,11 +339,16 @@ tbody tr:hover{background:#FAFBFB;}
     <div class="card">
       <div class="card-head">
         <h3>แนวโน้มการส่งแจ้งเตือน CBS</h3>
+        <span style="font-size:12.5px;color:var(--text-soft);">แท่งคือจำนวนรายเดือน เส้นทึบคือปีล่าสุด เส้นประคือปีก่อนหน้า</span>
       </div>
       <div class="chart-box"><canvas id="timelineChart"></canvas></div>
     </div>
     <div class="card">
-      <div class="card-head"><h3>จำนวนการส่งแยกตามประเภทภัยพิบัติ</h3></div>
+      <div class="card-head"><h3>จำนวนการส่งแยกตามประเภทภัยพิบัติ</h3>
+        <div class="seg" id="disasterScaleSeg" role="group" aria-label="สเกลแกนตัวเลข">
+          <button type="button" class="active" data-scale="linear">ปกติ</button>
+          <button type="button" data-scale="log" title="ช่วยให้เห็นแท่งที่ค่าน้อยเมื่อข้อมูลห่างกันมาก">ลอการิทึม</button>
+        </div></div>
       <div class="chart-box"><canvas id="disasterChart"></canvas></div>
     </div>
   </div>
@@ -499,7 +504,93 @@ function jsonpFetch(url, timeoutMs) {
   });
 }
 
+/* ============================================================================
+   โหมดข้อมูลจำลอง (mock) — เปิดโดยใส่ ?mock=1 ท้าย URL เช่น index.html?mock=1
+   ไม่แตะฐานข้อมูลจริง ใช้ดูหน้าตากราฟ/ตัวกรองเท่านั้น (ตัวเลขทั้งหมดเป็นข้อมูลสมมติ)
+   ============================================================================ */
+const IS_MOCK = new URLSearchParams(location.search).get('mock') === '1';
+
+function buildMockData() {
+  let seed = 20261030;                       // seed คงที่ → เปิดกี่ครั้งก็ได้ข้อมูลชุดเดิม
+  const rnd = () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+  const pick = (arr) => arr[Math.floor(rnd() * arr.length)];
+  const wpick = (items) => { let r = rnd() * items.reduce((s, i) => s + i.w, 0);
+    for (const i of items) { if ((r -= i.w) < 0) return i; } return items[items.length - 1]; };
+
+  // น้ำหนักประเภทภัย ให้ห่างกันมาก (อุทกภัยครอง ~87%) เหมือนข้อมูลจริง เพื่อทดสอบกราฟแท่ง
+  const disasters = [
+    { id:'D01', name:'อุทกภัย', w:1045 }, { id:'D02', name:'ภัยจากฝุ่นละอองขนาดเล็ก (PM2.5)', w:71 },
+    { id:'D03', name:'ดินโคลนถล่ม', w:58 }, { id:'D04', name:'ภัยจากการสู้รบ', w:10 },
+    { id:'D05', name:'ภัยจากการจราจรและขนส่ง', w:10 }, { id:'D06', name:'ภัยอื่น ๆ', w:3 },
+    { id:'D07', name:'แผ่นดินไหว', w:2 }, { id:'D08', name:'ภัยหนาว', w:1 },
+    { id:'D09', name:'ภัยจากเหตุรุนแรงในพื้นที่สาธารณะ', w:1 }, { id:'D10', name:'วาตภัย (พายุหมุนเขตร้อน)', w:1 },
+  ];
+  const events = [{ event_id:'E1', event_th:'แจ้งเตือนภัย', event_en:'Warning' },
+                  { event_id:'E2', event_th:'ประกาศเตือนล่วงหน้า', event_en:'Advisory' },
+                  { event_id:'E3', event_th:'ยกเลิกการแจ้งเตือน', event_en:'All clear' }];
+  const senders = [{ sender_id:'S1', sender_name:'ศูนย์เตือนภัยพิบัติแห่งชาติ' }, { sender_id:'S2', sender_name:'ปภ. เขต (จำลอง)' }];
+
+  // จำนวนครั้งต่อเดือน (ม.ค.–ธ.ค.) — ปี 2569 ยังไม่มีข้อมูลพ.ย.–ธ.ค. (เหมือนวันนี้)
+  const monthly = { 2025:[0,0,0,0,1,5,95,65,120,40,290,30], 2026:[18,0,27,30,11,8,120,155,370,130,0,0] };
+
+  const provCodes = PROVINCES.map(p => p.code);
+  // ถ่วงน้ำหนักให้บางจังหวัดโผล่บ่อย (เพื่อให้ Top 10 / แผนที่มีความต่าง)
+  const hotProv = ['50','57','65','90','80','10','40','34'];
+
+  const fact = [], bridge = [], messages = [];
+  let n = 0;
+  Object.entries(monthly).forEach(([yr, arr]) => arr.forEach((cnt, m) => {
+    for (let i = 0; i < cnt; i++) {
+      n++;
+      const d = wpick(disasters), ev = wpick([{...events[0], w:70}, {...events[1], w:20}, {...events[2], w:10}]);
+      const day = 1 + Math.floor(rnd() * 28);
+      const id = 'M' + String(n).padStart(5, '0');
+      const dateId = yr + String(m + 1).padStart(2, '0') + String(day).padStart(2, '0');
+      messages.push({ message_id:id, message_th:'(ข้อมูลจำลอง) ข้อความแจ้งเตือน' + d.name });
+      fact.push({ alert_id:id, date_id:dateId, time:String(Math.floor(rnd()*24)).padStart(2,'0') + ':' + String(Math.floor(rnd()*60)).padStart(2,'0'),
+        event_id:ev.event_id, disaster_id:d.id, sender_id:pick(senders).sender_id, message_id:id,
+        title:'ทดสอบ ' + d.name, duration_hour:pick([1,3,6,12,24]), send_count:1 });
+      const nProv = rnd() < .75 ? 1 : 2 + Math.floor(rnd() * 3);
+      const used = new Set();
+      for (let k = 0; k < nProv; k++) {
+        const pc = rnd() < .5 ? pick(hotProv) : pick(provCodes);
+        if (used.has(pc)) continue; used.add(pc);
+        const ac = pc + '0' + (1 + Math.floor(rnd() * 2)), tc = ac + '0' + (1 + Math.floor(rnd() * 2));
+        bridge.push({ alert_id:id, level:'tambon', province_code:pc, amphoe_code:ac, tambon_code:tc });
+      }
+    }
+  }));
+
+  return { fact_cb:fact, bridge_alert_location:bridge, dim_message:messages, dim_event:events, dim_sender:senders,
+    dim_disaster: disasters.map(d => ({ disaster_id:d.id, disaster_name:d.name })),
+    dim_province: PROVINCES.map(p => ({ province_code:p.code, province_name_th:p.th, region:p.region })) };
+}
+
+function buildMockGeo() {
+  const dim_amphoe = [], dim_tambon = [];
+  PROVINCES.forEach(p => [1, 2].forEach(a => {
+    const ac = p.code + '0' + a;
+    dim_amphoe.push({ amphoe_code:ac, province_code:p.code, amphoe_name_th:'อำเภอตัวอย่าง ' + a });
+    [1, 2].forEach(t => dim_tambon.push({ tambon_code:ac + '0' + t, amphoe_code:ac, tambon_name_th:'ตำบลตัวอย่าง ' + t }));
+  }));
+  return { dim_amphoe, dim_tambon };
+}
+
+function showMockBadge() {
+  const b = document.createElement('div');
+  b.id='mockBadge'; b.textContent = 'โหมดข้อมูลจำลอง — ตัวเลขทั้งหมดเป็นข้อมูลสมมติ';
+  b.style.cssText = 'position:fixed;left:12px;bottom:12px;z-index:9999;background:#fff3cd;color:#6b4e00;border:1px solid #f0d98a;border-radius:8px;padding:6px 12px;font-size:13px;font-weight:600;box-shadow:0 2px 8px rgba(0,0,0,.12);';
+  document.body.appendChild(b);
+}
+
 function loadData() {
+  if (IS_MOCK) {
+    RAW = buildMockData(); GEO = buildMockGeo(); hasLoadedOnce = true;
+    showLoading(false); hideError(); buildModel(); renderAll(true);
+    if (!document.getElementById('mockBadge')) { showMockBadge(); }
+    return;
+  }
   if (!hasLoadedOnce) showLoading(true);
   hideError();
 
@@ -745,7 +836,7 @@ const THAI_MONTH_ABBR = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.
 const RIBBON_COLORS = ['#9a9ae1','#41dfff','#d16ba5','#52cffe','#ba83ca','#5ffbf1'];
 
 function renderTimeline(alerts) {
-  // จัดกลุ่มตาม (ปี พ.ศ., เดือน) — เรียงปีจากเก่าไปใหม่ เพื่อให้ปีเก่าซ้อนอยู่ด้านล่าง ปีใหม่ซ้อนทับด้านบน
+  // กราฟผสม: แท่งรายเดือน (ซ้อนกันที่ตำแหน่งเดียวกัน ปีเก่ากว้างอยู่หลัง ปีใหม่แคบอยู่หน้า) + เส้นแนวโน้มของแต่ละปีทับด้านบน
   const byYear = {};
   alerts.forEach(a => {
     if (!a.date) return;
@@ -755,32 +846,78 @@ function renderTimeline(alerts) {
     byYear[beYear][m]++;
   });
   const years = Object.keys(byYear).map(Number).sort((a,b) => a - b);
+  const n = years.length;
 
-  const datasets = years.map((y, i) => ({
-    label: String(y),
-    data: byYear[y],
-    borderColor: RIBBON_COLORS[i % RIBBON_COLORS.length],
-    backgroundColor: RIBBON_COLORS[i % RIBBON_COLORS.length] + '55',
-    fill: true, tension: .35, pointRadius: 2,
-    pointBackgroundColor: RIBBON_COLORS[i % RIBBON_COLORS.length],
-  }));
+  // เดือนที่ยังมาไม่ถึงของปีปัจจุบัน → null (ไม่วาดแท่ง/เส้น)
+  const now = new Date();
+  const curBE = now.getFullYear() + 543, curM = now.getMonth();
+  const series = years.map(y => byYear[y].map((v, m) => (y === curBE && m > curM) ? null : v));
+  const maxY = Math.max(1, ...series.flat().filter(v => v !== null));
+
+  // ตัวเลขบนแท่ง: ให้ปีใหม่สุดมาก่อน ปีเก่าซ่อนเลขเมื่อค่าใกล้กันจนตัวเลขจะทับ (ยังดูค่าได้จาก tooltip)
+  const showLabel = (yi, m) => {
+    const v = series[yi][m];
+    if (!(v > 0)) return false;
+    for (let j = n - 1; j > yi; j--) {
+      const o = series[j][m];
+      if (o !== null && o > 0 && Math.abs(o - v) < maxY * 0.09) return false;
+    }
+    return true;
+  };
+
+  const barDatasets = years.map((y, i) => {
+    const color = RIBBON_COLORS[i % RIBBON_COLORS.length];
+    return {
+      type:'bar', label:String(y), data:series[i],
+      backgroundColor: color, borderRadius:3, borderSkipped:false,
+      grouped:false, categoryPercentage:.85,
+      barPercentage: n === 1 ? .6 : .95 - i * (.5 / (n - 1)),
+      order: 1 + (n - 1 - i),               // ปีใหม่อยู่หน้าสุดในกลุ่มแท่ง
+      datalabels:{ display: c => showLabel(i, c.dataIndex), anchor:'end', align:'end', offset:-2, clamp:true,
+        color:'#3a3f45', font:{ weight:700, size: 11 }, backgroundColor:'rgba(255,255,255,.85)', borderRadius:3, padding:{top:1,bottom:1,left:3,right:3},
+        formatter:(v)=>Number(v).toLocaleString('th-TH') },
+    };
+  });
+  const lineDatasets = years.map((y, i) => {
+    const color = RIBBON_COLORS[i % RIBBON_COLORS.length];
+    return {
+      type:'line', label:String(y), data:series[i],
+      borderColor:'#3a4350', backgroundColor:'#fff', borderWidth:1.8, borderDash: i === n - 1 ? [] : [5,4],
+      tension:.25, spanGaps:false, fill:false, order:0,
+      pointRadius:3.5, pointHoverRadius:6, pointBackgroundColor:'#fff', pointBorderColor: n === 1 ? '#3a4350' : color,
+      pointBorderWidth:2, datalabels:{ display:false },
+    };
+  });
 
   const ctx = document.getElementById('timelineChart');
   if (timelineChart) timelineChart.destroy();
   timelineChart = new Chart(ctx, {
-    type: 'line',
-    data: { labels: THAI_MONTH_ABBR, datasets },
+    type: 'bar',
+    plugins: window.ChartDataLabels ? [window.ChartDataLabels] : [],
+    data: { labels: THAI_MONTH_ABBR, datasets: barDatasets.concat(lineDatasets) },
     options: { responsive:true, maintainAspectRatio:false,
-      plugins:{ legend:{ display: years.length > 1, position:'top', align:'end',
-        labels:{ boxWidth:10, boxHeight:10, usePointStyle:true, pointStyle:'circle' } } },
+      interaction:{ mode:'index', intersect:false },
+      plugins:{
+        legend:{ display:true, position:'top', align:'end',
+          labels:{ boxWidth:10, boxHeight:10, usePointStyle:true, pointStyle:'rectRounded', font:{size:13},
+            // แสดงเฉพาะรายการปีของแท่ง (ไม่ซ้ำกับเส้น) + คำอธิบายเส้น
+            filter: it => it.datasetIndex < n,
+            sort: (a,b) => a.datasetIndex - b.datasetIndex } },
+        tooltip:{ filter: it => it.datasetIndex < n,
+          callbacks:{ label: c => ' ' + c.dataset.label + ': ' + Number(c.parsed.y).toLocaleString('th-TH') + ' ครั้ง' } },
+      },
       scales:{
-        y:{ beginAtZero:true, stacked:true, grid:{color:'#EEF1F1'} },
-        x:{ stacked:true, grid:{display:false} },
+        y:{ beginAtZero:true, grace:'10%', grid:{color:'#EEF1F1'}, ticks:{ precision:0, maxTicksLimit:6 },
+            title:{ display:true, text:'จำนวนครั้ง', color:'#6b7378', font:{size:12} } },
+        x:{ grid:{display:false} },
       } }
   });
 }
 
+let disasterScale = 'linear', lastDisasterAlerts = [];
 function renderDisasterChart(alerts) {
+  lastDisasterAlerts = alerts;
+  const isLog = disasterScale === 'log';
   const counts = groupCount(alerts, a => a.disaster_name);
   const entries = Object.entries(counts).sort((a,b) => b[1]-a[1]);
   const ctx = document.getElementById('disasterChart');
@@ -789,13 +926,32 @@ function renderDisasterChart(alerts) {
     type: 'bar',
     plugins: window.ChartDataLabels ? [window.ChartDataLabels] : [],
     data: { labels: entries.map(e=>e[0]), datasets:[{ data: entries.map(e=>e[1]),
-      backgroundColor: entries.map((_,i)=>DISASTER_COLORS[i % DISASTER_COLORS.length]), borderRadius:4 }] },
-    options: { indexAxis:'y', responsive:true, maintainAspectRatio:false, layout:{padding:{right:30}},
+      backgroundColor: entries.map((_,i)=>DISASTER_COLORS[i % DISASTER_COLORS.length]),
+      borderRadius:4, minBarLength:4 }] },   // แท่งค่าน้อยยังมองเห็นอย่างน้อย 4px
+    options: { indexAxis:'y', responsive:true, maintainAspectRatio:false, layout:{padding:{right:36}},
       plugins:{ legend:{display:false},
+        tooltip:{ callbacks:{ label: c => {
+          const tot = entries.reduce((s,e)=>s+e[1],0);
+          const v = c.parsed.x;
+          return ' ' + Number(v).toLocaleString('th-TH') + ' ครั้ง (' + (tot ? (v/tot*100).toFixed(1) : 0) + '%)';
+        } } },
         datalabels:{ anchor:'end', align:'right', clamp:true, clip:false, color:'#3a3f45', font:{weight:700, size:12.5}, formatter:(v)=>Number(v).toLocaleString('th-TH') } },
-      scales:{ x:{ beginAtZero:true, grid:{color:'#EEF1F1'} }, y:{ grid:{display:false} } } }
+      scales:{
+        x: isLog
+          ? { type:'logarithmic', min:0.5, grid:{color:'#EEF1F1'},
+              ticks:{ maxRotation:0, autoSkip:false, callback:(v)=> [1,10,100,1000,10000,100000].includes(v) ? v.toLocaleString('th-TH') : '' },
+              title:{ display:true, text:'สเกลลอการิทึม (แต่ละขีด = 10 เท่า)', color:'#6b7378', font:{size:12} } }
+          : { type:'linear', beginAtZero:true, grid:{color:'#EEF1F1'}, ticks:{ precision:0 } },
+        y:{ grid:{display:false}, ticks:{ font:{size:12.5} } } } }
   });
 }
+document.addEventListener('click', e => {
+  const btn = e.target.closest('#disasterScaleSeg button');
+  if (!btn) return;
+  disasterScale = btn.dataset.scale;
+  document.querySelectorAll('#disasterScaleSeg button').forEach(b => b.classList.toggle('active', b === btn));
+  renderDisasterChart(lastDisasterAlerts);
+});
 
 let geoJsonCache = null;
 // GeoJSON ต้นทาง (apisit/thailand.json) ใช้ชื่ออังกฤษที่สะกด/เว้นวรรคต่างจากฐานข้อมูลบางจังหวัด
