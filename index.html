@@ -173,7 +173,8 @@ a{color:var(--brand);}
 
 /* ---------- map ---------- */
 .map-row{display:grid;grid-template-columns:2.3fr 1fr;gap:14px;}
-#map{height:420px;border-radius:8px;overflow:hidden;background:#eef1f2;}
+.map-row > .card:first-child{display:flex;flex-direction:column;}
+#map{flex:1 1 auto;min-height:460px;border-radius:8px;overflow:hidden;background:#eef1f2;}
 .province-label{background:transparent;border:none;box-shadow:none;font-size:10.5px;font-weight:700;
   color:#1f2a2e;white-space:nowrap;pointer-events:none;transform:translate(-50%,-50%);
   text-shadow:0 1px 2px #fff,0 -1px 2px #fff,1px 0 2px #fff,-1px 0 2px #fff;}
@@ -255,6 +256,7 @@ tbody tr:hover{background:#FAFBFB;}
 @media (max-width:980px){
   .kpi-grid{grid-template-columns:1fr 1fr;}
   .chart-row,.map-row,.footer-grid{grid-template-columns:1fr;}
+  #map{min-height:360px;}
 }
 </style>
 </head>
@@ -976,10 +978,12 @@ function updateLabelVisibility() {
   const show = leafletMap.getZoom() >= 7;
   document.getElementById('map').classList.toggle('hide-province-labels', !show);
 }
-
+	
+const THAILAND_BOUNDS = [[5.6, 97.3], [20.5, 105.7]];
 function renderMap(areaRows) {
   if (!leafletMap) {
-    leafletMap = L.map('map', { scrollWheelZoom:false }).setView([13.0, 101.0], 5.4);
+    leafletMap = L.map('map', { scrollWheelZoom:false, zoomSnap:.25 }).fitBounds(THAILAND_BOUNDS, { padding:[8,8] });
+	ResizeObserver
     <!-- L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {-->
     <!-- attribution: '© OpenStreetMap · © CARTO', maxZoom: 18, -->
 	L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
@@ -1044,7 +1048,7 @@ function autoZoomMap() {
   if (f.province && provinceLayerByCode[f.province]) {
     leafletMap.flyToBounds(provinceLayerByCode[f.province].getBounds(), { padding:[24,24], maxZoom:10, duration:.6 });
   } else {
-    leafletMap.flyTo([13.0, 101.0], 5.4, { duration:.6 });
+    leafletMap.flyToBounds(THAILAND_BOUNDS, { padding:[8,8], duration:.6 });
   }
 }
 
