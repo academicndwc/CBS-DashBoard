@@ -942,6 +942,7 @@ function renderDisasterChart(alerts) {
         x: isLog
           ? { type:'logarithmic', min:0.5, grid:{color:'#EEF1F1'},
               ticks:{ maxRotation:0, autoSkip:false, callback:(v)=> [1,10,100,1000,10000,100000].includes(v) ? v.toLocaleString('th-TH') : '' },
+              title:{ display:true, text:'สเกลลอการิทึม (แต่ละขีด = 10 เท่า)', color:'#6b7378', font:{size:12} } }
           : { type:'linear', beginAtZero:true, grid:{color:'#EEF1F1'}, ticks:{ precision:0 } },
         y:{ grid:{display:false}, ticks:{ font:{size:12.5} } } } }
   });
